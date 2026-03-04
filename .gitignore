@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Environment variables — NEVER commit secrets
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# SQLite database files — contain live user data
+backend/src/db/*.db
+backend/src/db/*.db-shm
+backend/src/db/*.db-wal
+
+# Uploaded files — stored on server filesystem
+backend/uploads/
+
+# Build output
+frontend/dist/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Editor artifacts
+.vscode/
+*.swp
+*.swo

@@ -1,0 +1,339 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Navbar from '../components/Navbar';
+import EligibilityPanel from '../components/EligibilityPanel';
+import { storeFile, getStoredFile } from '../services/fileStore';
+
+const ORG_TYPES = ['501(c)(3)', '501(c)(4)', 'Community-Based Organization', 'Faith-Based Organization', 'For-Profit Business', 'Government Agency', 'Individual'];
+const CATEGORIES = ['Youth Programs', 'Senior Services', 'Public Health', 'Neighborhood Safety', 'Arts & Culture', 'Workforce Development', 'Other'];
+
+const EMPTY_FORM = {
+  orgName: '', ein: '', orgType: '', yearFounded: '', annualBudget: '',
+  numEmployees: '', contactName: '', contactEmail: '', contactPhone: '',
+  orgAddress: '', missionStatement: '',
+  projectTitle: '', projectCategory: '', projectDescription: '',
+  targetPopulation: '', numBeneficiaries: '', totalProjectCost: '',
+  amountRequested: '', projectStartDate: '', projectEndDate: '',
+  prevGrant: false,
+};
+
+// Per-field validation rules for onBlur
+const FIELD_VALIDATORS = {
+  orgName: (v) => (!v || v.length < 2) ? 'Organization name must be at least 2 characters.' : (v.length > 100 ? 'Organization name must be under 100 characters.' : null),
+  ein: (v) => !/^\d{2}-\d{7}$/.test(v) ? 'EIN must be in format XX-XXXXXXX.' : null,
+  orgType: (v) => !v ? 'Please select an organization type.' : null,
+  yearFounded: (v) => { const yr = parseInt(v); return (!yr || yr < 1800 || yr > new Date().getFullYear()) ? `Year must be between 1800 and ${new Date().getFullYear()}.` : null; },
+  annualBudget: (v) => { const b = parseFloat(v); return (v === '' || isNaN(b) || b < 0 || b > 100000000) ? 'Enter a valid annual budget ($0–$100,000,000).' : null; },
+  numEmployees: (v) => { const n = parseInt(v); return (v === '' || isNaN(n) || n < 0 || n > 9999) ? 'Enter number of employees (0–9,999).' : null; },
+  contactName: (v) => (!v || v.length < 2) ? 'Contact name must be at least 2 characters.' : (v.length > 50 ? 'Contact name must be under 50 characters.' : null),
+  contactEmail: (v) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? 'Enter a valid email.' : null,
+  contactPhone: (v) => !/^\(\d{3}\) \d{3}-\d{4}$/.test(v) ? 'Phone must be in format (XXX) XXX-XXXX.' : null,
+  orgAddress: (v) => (!v || v.length < 5) ? 'Address is required (minimum 5 characters).' : null,
+  missionStatement: (v) => (!v || v.length < 20) ? 'Mission statement must be at least 20 characters.' : (v.length > 500 ? 'Mission statement must be under 500 characters.' : null),
+  projectTitle: (v) => (!v || v.length < 5) ? 'Project title must be at least 5 characters.' : (v.length > 100 ? 'Project title must be under 100 characters.' : null),
+  projectCategory: (v) => !v ? 'Select a project category.' : null,
+  projectDescription: (v) => (!v || v.length < 50) ? 'Description must be at least 50 characters.' : (v.length > 2000 ? 'Description must be under 2,000 characters.' : null),
+  targetPopulation: (v) => (!v || v.length < 5) ? 'Target population is required (minimum 5 characters).' : null,
+  numBeneficiaries: (v) => { const n = parseInt(v); return (v === '' || isNaN(n) || n < 1) ? 'Enter number of beneficiaries (minimum 1).' : null; },
+  totalProjectCost: (v) => { const n = parseFloat(v); return (v === '' || isNaN(n) || n < 100 || n > 10000000) ? 'Total project cost must be between $100 and $10,000,000.' : null; },
+  amountRequested: (v) => { const n = parseFloat(v); return (v === '' || isNaN(n) || n < 100 || n > 50000) ? 'Amount requested must be between $100 and $50,000.' : null; },
+  projectStartDate: (v) => {
+    if (!v) return 'Start date is required.';
+    const start = new Date(v); const min = new Date(); min.setDate(min.getDate() + 30);
+    return start < min ? 'Start date must be at least 30 days from today.' : null;
+  },
+  projectEndDate: (v, form) => {
+    if (!v) return 'End date is required.';
+    if (!form.projectStartDate) return null;
+    const start = new Date(form.projectStartDate); const end = new Date(v);
+    if (end <= start) return 'End date must be after start date.';
+    const maxEnd = new Date(start); maxEnd.setMonth(maxEnd.getMonth() + 24);
+    return end > maxEnd ? 'Project must end within 24 months of start.' : null;
+  },
+};
+
+export default function ApplicationForm() {
+  const navigate = useNavigate();
+  const [section, setSection] = useState(1);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [file, setFile] = useState(getStoredFile());
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+
+  function handleChange(e) {
+    const { name, value, type, checked } = e.target;
+    setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    if (errors[name]) setErrors((prev) => { const copy = { ...prev }; delete copy[name]; return copy; });
+  }
+
+  function handleBlur(e) {
+    const { name, value } = e.target;
+    setTouched((prev) => ({ ...prev, [name]: true }));
+    const validator = FIELD_VALIDATORS[name];
+    if (validator) {
+      const err = validator(value, form);
+      setErrors((prev) => {
+        const copy = { ...prev };
+        if (err) copy[name] = err; else delete copy[name];
+        return copy;
+      });
+    }
+  }
+
+  function validateSection(fields) {
+    const errs = {};
+    for (const name of fields) {
+      const validator = FIELD_VALIDATORS[name];
+      if (validator) {
+        const err = validator(form[name], form);
+        if (err) errs[name] = err;
+      }
+    }
+    return errs;
+  }
+
+  const section1Fields = ['orgName', 'ein', 'orgType', 'yearFounded', 'annualBudget', 'numEmployees', 'contactName', 'contactEmail', 'contactPhone', 'orgAddress', 'missionStatement'];
+  const section2Fields = ['projectTitle', 'projectCategory', 'projectDescription', 'targetPopulation', 'numBeneficiaries', 'totalProjectCost', 'amountRequested', 'projectStartDate', 'projectEndDate'];
+
+  function handleNext() {
+    const errs = validateSection(section1Fields);
+    if (Object.keys(errs).length > 0) { setErrors(errs); setTouched(Object.fromEntries(section1Fields.map(f => [f, true]))); return; }
+    setErrors({});
+    setSection(2);
+    window.scrollTo(0, 0);
+  }
+
+  function handleFileChange(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (!allowed.includes(f.type)) { setErrors((p) => ({ ...p, file: 'Only PDF, JPG, PNG files are allowed.' })); return; }
+    if (f.size > 5 * 1024 * 1024) { setErrors((p) => ({ ...p, file: 'File must be under 5 MB.' })); return; }
+    setFile(f);
+    storeFile(f);
+    setErrors((p) => { const copy = { ...p }; delete copy.file; return copy; });
+  }
+
+  function handleReview() {
+    const errs = validateSection(section2Fields);
+    if (!file) errs.file = 'Please upload a supporting document (PDF, JPG, or PNG).';
+    if (Object.keys(errs).length > 0) { setErrors(errs); setTouched(Object.fromEntries(section2Fields.map(f => [f, true]))); return; }
+    setErrors({});
+    sessionStorage.setItem('draftForm', JSON.stringify(form));
+    sessionStorage.setItem('draftFileName', file?.name || '');
+    navigate('/apply/review');
+  }
+
+  const eligibilityData = {
+    orgType: form.orgType, yearFounded: form.yearFounded,
+    annualBudget: form.annualBudget, amountRequested: form.amountRequested,
+    totalProjectCost: form.totalProjectCost, numBeneficiaries: form.numBeneficiaries,
+  };
+
+  function fieldProps(name, extra = {}) {
+    return {
+      name, value: form[name], onChange: handleChange, onBlur: handleBlur,
+      className: errors[name] ? 'input-error' : '', ...extra,
+    };
+  }
+
+  return (
+    <div className="page">
+      <Navbar />
+      <div className="container">
+        <div className="page-header">
+          <div>
+            <h1>Grant Application</h1>
+            <div className="section-indicator">
+              <span className={section === 1 ? 'step active' : 'step done'}>1. Organization Info</span>
+              <span className="step-arrow">→</span>
+              <span className={section === 2 ? 'step active' : 'step'}>2. Project Details</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="form-layout">
+          <div className="form-main">
+            {section === 1 && (
+              <div className="card">
+                <h2 className="section-title">Section 1: Organization Information</h2>
+
+                <div className="form-group">
+                  <label>Organization Name *</label>
+                  <input {...fieldProps('orgName')} placeholder="Legal name of your organization" />
+                  {errors.orgName && <span className="field-error">{errors.orgName}</span>}
+                  <span className="field-hint">The legal name of your organization</span>
+                </div>
+
+                <div className="form-group">
+                  <label>EIN (Tax ID) *</label>
+                  <input {...fieldProps('ein')} placeholder="52-1234567" />
+                  {errors.ein && <span className="field-error">{errors.ein}</span>}
+                  <span className="field-hint">Format: XX-XXXXXXX (your IRS Employer Identification Number)</span>
+                </div>
+
+                <div className="form-group">
+                  <label>Organization Type *</label>
+                  <select {...fieldProps('orgType')}>
+                    <option value="">Select organization type…</option>
+                    {ORG_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  {errors.orgType && <span className="field-error">{errors.orgType}</span>}
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Year Founded *</label>
+                    <input {...fieldProps('yearFounded', { type: 'number', min: '1800', max: new Date().getFullYear() })} placeholder="e.g. 2010" />
+                    {errors.yearFounded && <span className="field-error">{errors.yearFounded}</span>}
+                  </div>
+                  <div className="form-group">
+                    <label>Number of Full-Time Employees *</label>
+                    <input {...fieldProps('numEmployees', { type: 'number', min: '0', max: '9999' })} placeholder="e.g. 8" />
+                    {errors.numEmployees && <span className="field-error">{errors.numEmployees}</span>}
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Annual Operating Budget ($) *</label>
+                  <input {...fieldProps('annualBudget', { type: 'number', min: '0' })} placeholder="e.g. 320000" />
+                  {errors.annualBudget && <span className="field-error">{errors.annualBudget}</span>}
+                  <span className="field-hint">Your organization's total annual budget (enter in dollars, no commas)</span>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Primary Contact Name *</label>
+                    <input {...fieldProps('contactName')} placeholder="First and last name" />
+                    {errors.contactName && <span className="field-error">{errors.contactName}</span>}
+                  </div>
+                  <div className="form-group">
+                    <label>Primary Contact Phone *</label>
+                    <input {...fieldProps('contactPhone', { type: 'tel' })} placeholder="(410) 555-0100" />
+                    {errors.contactPhone && <span className="field-error">{errors.contactPhone}</span>}
+                    <span className="field-hint">Format: (XXX) XXX-XXXX</span>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Primary Contact Email *</label>
+                  <input {...fieldProps('contactEmail', { type: 'email' })} placeholder="contact@yourorg.org" />
+                  {errors.contactEmail && <span className="field-error">{errors.contactEmail}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Organization Address *</label>
+                  <input {...fieldProps('orgAddress')} placeholder="Street, City, State, Zip" />
+                  {errors.orgAddress && <span className="field-error">{errors.orgAddress}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Mission Statement * <span className="char-count">({form.missionStatement.length}/500)</span></label>
+                  <textarea {...fieldProps('missionStatement', { rows: 4, maxLength: 500 })} placeholder="Briefly describe your organization's mission (20-500 characters)" />
+                  {errors.missionStatement && <span className="field-error">{errors.missionStatement}</span>}
+                </div>
+
+                <div className="form-actions">
+                  <button className="btn btn-primary" onClick={handleNext}>Next: Project Details →</button>
+                </div>
+              </div>
+            )}
+
+            {section === 2 && (
+              <div className="card">
+                <h2 className="section-title">Section 2: Project Details</h2>
+
+                <div className="form-group">
+                  <label>Project Title *</label>
+                  <input {...fieldProps('projectTitle')} placeholder="A descriptive title for your project" />
+                  {errors.projectTitle && <span className="field-error">{errors.projectTitle}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Project Category *</label>
+                  <select {...fieldProps('projectCategory')}>
+                    <option value="">Select a category…</option>
+                    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  {errors.projectCategory && <span className="field-error">{errors.projectCategory}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Project Description * <span className="char-count">({form.projectDescription.length}/2000)</span></label>
+                  <textarea {...fieldProps('projectDescription', { rows: 5, maxLength: 2000 })} placeholder="Describe the project goals, activities, and expected outcomes (50-2000 characters)" />
+                  {errors.projectDescription && <span className="field-error">{errors.projectDescription}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Target Population Served *</label>
+                  <input {...fieldProps('targetPopulation')} placeholder='e.g. "At-risk youth ages 14-18 in East Maplewood"' />
+                  {errors.targetPopulation && <span className="field-error">{errors.targetPopulation}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Estimated Number of Beneficiaries *</label>
+                  <input {...fieldProps('numBeneficiaries', { type: 'number', min: '1' })} placeholder="e.g. 500" />
+                  {errors.numBeneficiaries && <span className="field-error">{errors.numBeneficiaries}</span>}
+                  <span className="field-hint">How many people will directly benefit? (minimum 50 for eligibility)</span>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Total Project Cost ($) *</label>
+                    <input {...fieldProps('totalProjectCost', { type: 'number', min: '100' })} placeholder="e.g. 95000" />
+                    {errors.totalProjectCost && <span className="field-error">{errors.totalProjectCost}</span>}
+                  </div>
+                  <div className="form-group">
+                    <label>Amount Requested ($) *</label>
+                    <input {...fieldProps('amountRequested', { type: 'number', min: '100', max: '50000' })} placeholder="e.g. 40000" />
+                    {errors.amountRequested && <span className="field-error">{errors.amountRequested}</span>}
+                    <span className="field-hint">Maximum $50,000. Must be ≤ 50% of total project cost for eligibility.</span>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Project Start Date *</label>
+                    <input {...fieldProps('projectStartDate', { type: 'date' })} />
+                    {errors.projectStartDate && <span className="field-error">{errors.projectStartDate}</span>}
+                    <span className="field-hint">Must be at least 30 days from today.</span>
+                  </div>
+                  <div className="form-group">
+                    <label>Project End Date *</label>
+                    <input {...fieldProps('projectEndDate', { type: 'date' })} />
+                    {errors.projectEndDate && <span className="field-error">{errors.projectEndDate}</span>}
+                    <span className="field-hint">Must be after start date, within 24 months.</span>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="checkbox-label">
+                    <input name="prevGrant" type="checkbox" checked={form.prevGrant} onChange={handleChange} />
+                    Our organization has previously received a Maplewood County grant
+                  </label>
+                </div>
+
+                <div className="form-group">
+                  <label>Supporting Document * <span className="text-muted">(PDF, JPG, PNG — max 5 MB)</span></label>
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} className={errors.file ? 'input-error' : ''} />
+                  {file && <span className="file-selected">✅ {file.name}</span>}
+                  {errors.file && <span className="field-error">{errors.file}</span>}
+                  <span className="field-hint">Upload your project proposal, budget breakdown, or supporting documentation.</span>
+                </div>
+
+                <div className="form-actions">
+                  <button className="btn btn-outline" onClick={() => { setErrors({}); setSection(1); window.scrollTo(0, 0); }}>← Back</button>
+                  <button className="btn btn-primary" onClick={handleReview}>Review & Submit →</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="form-sidebar">
+            <EligibilityPanel formData={eligibilityData} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
