@@ -60,9 +60,26 @@ export default function ApplicationForm() {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
+  function formatEIN(raw) {
+    const digits = raw.replace(/\D/g, '').slice(0, 9);
+    if (digits.length <= 2) return digits;
+    return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  }
+
+  function formatPhone(raw) {
+    const digits = raw.replace(/\D/g, '').slice(0, 10);
+    if (digits.length === 0) return '';
+    if (digits.length <= 3) return `(${digits}`;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
-    setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    let formatted = type === 'checkbox' ? checked : value;
+    if (name === 'ein') formatted = formatEIN(value);
+    if (name === 'contactPhone') formatted = formatPhone(value);
+    setForm((prev) => ({ ...prev, [name]: formatted }));
     if (errors[name]) setErrors((prev) => { const copy = { ...prev }; delete copy[name]; return copy; });
   }
 
@@ -167,9 +184,9 @@ export default function ApplicationForm() {
 
                 <div className="form-group">
                   <label>EIN (Tax ID) *</label>
-                  <input {...fieldProps('ein')} placeholder="52-1234567" />
+                  <input {...fieldProps('ein')} type="text" inputMode="numeric" placeholder="52-1234567" maxLength={10} />
                   {errors.ein && <span className="field-error">{errors.ein}</span>}
-                  <span className="field-hint">Format: XX-XXXXXXX (your IRS Employer Identification Number)</span>
+                  <span className="field-hint">Your IRS Employer Identification Number — auto-formatted as XX-XXXXXXX</span>
                 </div>
 
                 <div className="form-group">
@@ -209,9 +226,9 @@ export default function ApplicationForm() {
                   </div>
                   <div className="form-group">
                     <label>Primary Contact Phone *</label>
-                    <input {...fieldProps('contactPhone', { type: 'tel' })} placeholder="(410) 555-0100" />
+                    <input {...fieldProps('contactPhone')} type="tel" inputMode="numeric" placeholder="(410) 555-0100" maxLength={14} />
                     {errors.contactPhone && <span className="field-error">{errors.contactPhone}</span>}
-                    <span className="field-hint">Format: (XXX) XXX-XXXX</span>
+                    <span className="field-hint">Auto-formatted as (XXX) XXX-XXXX</span>
                   </div>
                 </div>
 
