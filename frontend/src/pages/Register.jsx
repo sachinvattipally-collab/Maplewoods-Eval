@@ -11,12 +11,26 @@ export default function Register() {
   const [apiError, setApiError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Auto-formats digits into (XXX) XXX-XXXX as the user types
+  function formatPhone(raw) {
+    const digits = raw.replace(/\D/g, '').slice(0, 10);
+    if (digits.length === 0) return '';
+    if (digits.length <= 3) return `(${digits}`;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+
   function validate(field, value) {
     const errs = { ...errors };
     if (field === 'full_name' && value.length < 2) errs.full_name = 'Full name must be at least 2 characters.';
     else if (field === 'full_name') delete errs.full_name;
     if (field === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) errs.email = 'Enter a valid email address.';
     else if (field === 'email') delete errs.email;
+    if (field === 'phone') {
+      if (value && !/^\(\d{3}\) \d{3}-\d{4}$/.test(value))
+        errs.phone = 'Phone must be a complete 10-digit number — (XXX) XXX-XXXX.';
+      else delete errs.phone;
+    }
     const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (field === 'password' && !strongPassword.test(value))
       errs.password = 'Password must be 8+ characters and include uppercase, lowercase, and a number.';
@@ -27,7 +41,10 @@ export default function Register() {
   }
 
   function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    const formatted = name === 'phone' ? formatPhone(value) : value;
+    setForm({ ...form, [name]: formatted });
+    if (errors[name]) validate(name, formatted);
   }
 
   function handleBlur(e) {
@@ -74,8 +91,26 @@ export default function Register() {
           </div>
           <div className="form-group">
             <label htmlFor="phone">Phone Number</label>
-            <input id="phone" name="phone" type="tel" value={form.phone}
-              onChange={handleChange} placeholder="(410) 555-0100" />
+            <input
+              id="phone"
+              name="phone"
+              type="tel"
+              value={form.phone}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              onKeyDown={(e) => {
+                // Allow: digits, backspace, delete, tab, arrows, home/end
+                const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','Home','End'];
+                if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
+              }}
+              placeholder="(XXX) XXX-XXXX"
+              maxLength={14}
+              className={errors.phone ? 'input-error' : ''}
+            />
+            {errors.phone
+              ? <span className="field-error">{errors.phone}</span>
+              : <span className="field-hint" style={{ fontSize: 12, color: 'var(--text-muted)' }}>Format: (XXX) XXX-XXXX · 10 digits</span>
+            }
           </div>
           <div className="form-group">
             <label htmlFor="organization_name">Organization Name</label>

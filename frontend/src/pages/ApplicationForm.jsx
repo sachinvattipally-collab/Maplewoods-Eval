@@ -17,37 +17,122 @@ const EMPTY_FORM = {
   prevGrant: false,
 };
 
-// Per-field validation rules for onBlur
+// Per-field validation rules — each returns an error string or null.
+// Validators that depend on sibling fields receive the full form as a second arg.
 const FIELD_VALIDATORS = {
-  orgName: (v) => (!v || v.length < 2) ? 'Organization name must be at least 2 characters.' : (v.length > 100 ? 'Organization name must be under 100 characters.' : null),
-  ein: (v) => !/^\d{2}-\d{7}$/.test(v) ? 'EIN must be in format XX-XXXXXXX.' : null,
-  orgType: (v) => !v ? 'Please select an organization type.' : null,
-  yearFounded: (v) => { const yr = parseInt(v); return (!yr || yr < 1800 || yr > new Date().getFullYear()) ? `Year must be between 1800 and ${new Date().getFullYear()}.` : null; },
-  annualBudget: (v) => { const b = parseFloat(v); return (v === '' || isNaN(b) || b < 0 || b > 100000000) ? 'Enter a valid annual budget ($0–$100,000,000).' : null; },
-  numEmployees: (v) => { const n = parseInt(v); return (v === '' || isNaN(n) || n < 0 || n > 9999) ? 'Enter number of employees (0–9,999).' : null; },
-  contactName: (v) => (!v || v.length < 2) ? 'Contact name must be at least 2 characters.' : (v.length > 50 ? 'Contact name must be under 50 characters.' : null),
-  contactEmail: (v) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? 'Enter a valid email.' : null,
-  contactPhone: (v) => !/^\(\d{3}\) \d{3}-\d{4}$/.test(v) ? 'Phone must be in format (XXX) XXX-XXXX.' : null,
-  orgAddress: (v) => (!v || v.length < 5) ? 'Address is required (minimum 5 characters).' : null,
-  missionStatement: (v) => (!v || v.length < 20) ? 'Mission statement must be at least 20 characters.' : (v.length > 500 ? 'Mission statement must be under 500 characters.' : null),
-  projectTitle: (v) => (!v || v.length < 5) ? 'Project title must be at least 5 characters.' : (v.length > 100 ? 'Project title must be under 100 characters.' : null),
-  projectCategory: (v) => !v ? 'Select a project category.' : null,
-  projectDescription: (v) => (!v || v.length < 50) ? 'Description must be at least 50 characters.' : (v.length > 2000 ? 'Description must be under 2,000 characters.' : null),
-  targetPopulation: (v) => (!v || v.length < 5) ? 'Target population is required (minimum 5 characters).' : null,
-  numBeneficiaries: (v) => { const n = parseInt(v); return (v === '' || isNaN(n) || n < 1) ? 'Enter number of beneficiaries (minimum 1).' : null; },
-  totalProjectCost: (v) => { const n = parseFloat(v); return (v === '' || isNaN(n) || n < 100 || n > 10000000) ? 'Total project cost must be between $100 and $10,000,000.' : null; },
-  amountRequested: (v) => { const n = parseFloat(v); return (v === '' || isNaN(n) || n < 100 || n > 50000) ? 'Amount requested must be between $100 and $50,000.' : null; },
-  projectStartDate: (v) => {
-    if (!v) return 'Start date is required.';
-    const start = new Date(v); const min = new Date(); min.setDate(min.getDate() + 30);
-    return start < min ? 'Start date must be at least 30 days from today.' : null;
+  orgName(v) {
+    if (!v || v.length < 2) return 'Organization name must be at least 2 characters.';
+    if (v.length > 100)     return 'Organization name must be under 100 characters.';
+    return null;
   },
-  projectEndDate: (v, form) => {
+
+  ein(v) {
+    return /^\d{2}-\d{7}$/.test(v) ? null : 'EIN must be in format XX-XXXXXXX.';
+  },
+
+  orgType(v) {
+    return v ? null : 'Please select an organization type.';
+  },
+
+  yearFounded(v) {
+    const yr = parseInt(v);
+    const max = new Date().getFullYear();
+    return (!yr || yr < 1800 || yr > max) ? `Year must be between 1800 and ${max}.` : null;
+  },
+
+  annualBudget(v) {
+    const b = parseFloat(v);
+    return (v === '' || isNaN(b) || b < 0 || b > 100_000_000)
+      ? 'Enter a valid annual budget ($0–$100,000,000).'
+      : null;
+  },
+
+  numEmployees(v) {
+    const n = parseInt(v);
+    return (v === '' || isNaN(n) || n < 0 || n > 9999)
+      ? 'Enter number of employees (0–9,999).'
+      : null;
+  },
+
+  contactName(v) {
+    if (!v || v.length < 2) return 'Contact name must be at least 2 characters.';
+    if (v.length > 50)      return 'Contact name must be under 50 characters.';
+    return null;
+  },
+
+  contactEmail(v) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? null : 'Enter a valid email.';
+  },
+
+  contactPhone(v) {
+    return /^\(\d{3}\) \d{3}-\d{4}$/.test(v) ? null : 'Phone must be in format (XXX) XXX-XXXX.';
+  },
+
+  orgAddress(v) {
+    return (!v || v.length < 5) ? 'Address is required (minimum 5 characters).' : null;
+  },
+
+  missionStatement(v) {
+    if (!v || v.length < 20) return 'Mission statement must be at least 20 characters.';
+    if (v.length > 500)      return 'Mission statement must be under 500 characters.';
+    return null;
+  },
+
+  projectTitle(v) {
+    if (!v || v.length < 5) return 'Project title must be at least 5 characters.';
+    if (v.length > 100)     return 'Project title must be under 100 characters.';
+    return null;
+  },
+
+  projectCategory(v) {
+    return v ? null : 'Select a project category.';
+  },
+
+  projectDescription(v) {
+    if (!v || v.length < 50) return 'Description must be at least 50 characters.';
+    if (v.length > 2000)     return 'Description must be under 2,000 characters.';
+    return null;
+  },
+
+  targetPopulation(v) {
+    return (!v || v.length < 5) ? 'Target population is required (minimum 5 characters).' : null;
+  },
+
+  numBeneficiaries(v) {
+    const n = parseInt(v);
+    return (v === '' || isNaN(n) || n < 1) ? 'Enter number of beneficiaries (minimum 1).' : null;
+  },
+
+  totalProjectCost(v) {
+    const n = parseFloat(v);
+    return (v === '' || isNaN(n) || n < 100 || n > 10_000_000)
+      ? 'Total project cost must be between $100 and $10,000,000.'
+      : null;
+  },
+
+  amountRequested(v) {
+    const n = parseFloat(v);
+    return (v === '' || isNaN(n) || n < 100 || n > 50_000)
+      ? 'Amount requested must be between $100 and $50,000.'
+      : null;
+  },
+
+  projectStartDate(v) {
+    if (!v) return 'Start date is required.';
+    const start = new Date(v);
+    const earliest = new Date();
+    earliest.setDate(earliest.getDate() + 30);
+    return start < earliest ? 'Start date must be at least 30 days from today.' : null;
+  },
+
+  projectEndDate(v, form) {
     if (!v) return 'End date is required.';
     if (!form.projectStartDate) return null;
-    const start = new Date(form.projectStartDate); const end = new Date(v);
+    const start = new Date(form.projectStartDate);
+    const end = new Date(v);
     if (end <= start) return 'End date must be after start date.';
-    const maxEnd = new Date(start); maxEnd.setMonth(maxEnd.getMonth() + 24);
+    const maxEnd = new Date(start);
+    maxEnd.setMonth(maxEnd.getMonth() + 24);
     return end > maxEnd ? 'Project must end within 24 months of start.' : null;
   },
 };
@@ -80,7 +165,13 @@ export default function ApplicationForm() {
     if (name === 'ein') formatted = formatEIN(value);
     if (name === 'contactPhone') formatted = formatPhone(value);
     setForm((prev) => ({ ...prev, [name]: formatted }));
-    if (errors[name]) setErrors((prev) => { const copy = { ...prev }; delete copy[name]; return copy; });
+    if (errors[name]) {
+      setErrors((prev) => {
+        const copy = { ...prev };
+        delete copy[name];
+        return copy;
+      });
+    }
   }
 
   function handleBlur(e) {
@@ -91,7 +182,11 @@ export default function ApplicationForm() {
       const err = validator(value, form);
       setErrors((prev) => {
         const copy = { ...prev };
-        if (err) copy[name] = err; else delete copy[name];
+        if (err) {
+          copy[name] = err;
+        } else {
+          delete copy[name];
+        }
         return copy;
       });
     }
@@ -114,7 +209,11 @@ export default function ApplicationForm() {
 
   function handleNext() {
     const errs = validateSection(section1Fields);
-    if (Object.keys(errs).length > 0) { setErrors(errs); setTouched(Object.fromEntries(section1Fields.map(f => [f, true]))); return; }
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      setTouched(Object.fromEntries(section1Fields.map((f) => [f, true])));
+      return;
+    }
     setErrors({});
     setSection(2);
     window.scrollTo(0, 0);
@@ -123,18 +222,40 @@ export default function ApplicationForm() {
   function handleFileChange(e) {
     const f = e.target.files[0];
     if (!f) return;
+
     const allowed = ['application/pdf', 'image/jpeg', 'image/png'];
-    if (!allowed.includes(f.type)) { setErrors((p) => ({ ...p, file: 'Only PDF, JPG, PNG files are allowed.' })); return; }
-    if (f.size > 5 * 1024 * 1024) { setErrors((p) => ({ ...p, file: 'File must be under 5 MB.' })); return; }
+    if (!allowed.includes(f.type)) {
+      setErrors((p) => ({ ...p, file: 'Only PDF, JPG, PNG files are allowed.' }));
+      return;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      setErrors((p) => ({ ...p, file: 'File must be under 5 MB.' }));
+      return;
+    }
+
     setFile(f);
     storeFile(f);
-    setErrors((p) => { const copy = { ...p }; delete copy.file; return copy; });
+    setErrors((p) => {
+      const copy = { ...p };
+      delete copy.file;
+      return copy;
+    });
+  }
+
+  function handleBack() {
+    setErrors({});
+    setSection(1);
+    window.scrollTo(0, 0);
   }
 
   function handleReview() {
     const errs = validateSection(section2Fields);
     if (!file) errs.file = 'Please upload a supporting document (PDF, JPG, or PNG).';
-    if (Object.keys(errs).length > 0) { setErrors(errs); setTouched(Object.fromEntries(section2Fields.map(f => [f, true]))); return; }
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      setTouched(Object.fromEntries(section2Fields.map((f) => [f, true])));
+      return;
+    }
     setErrors({});
     sessionStorage.setItem('draftForm', JSON.stringify(form));
     sessionStorage.setItem('draftFileName', file?.name || '');
@@ -339,7 +460,7 @@ export default function ApplicationForm() {
                 </div>
 
                 <div className="form-actions">
-                  <button className="btn btn-outline" onClick={() => { setErrors({}); setSection(1); window.scrollTo(0, 0); }}>← Back</button>
+                  <button className="btn btn-outline" onClick={handleBack}>← Back</button>
                   <button className="btn btn-primary" onClick={handleReview}>Review & Submit →</button>
                 </div>
               </div>
