@@ -152,6 +152,7 @@ SUBMITTED → UNDER_REVIEW → APPROVED
 
 * **Two\-section form** with navigation indicator (step 1 / step 2).
 * **Real\-time eligibility panel** in a sticky sidebar alongside the form.
+* **Phone auto\-formatting** on registration and application form — digits auto\-formatted to \(XXX\) XXX\-XXXX, non\-digits blocked at input.
 * **Inline field validation** on blur with specific error messages.
 * **Pre\-submission review screen** showing all entered data and eligibility summary.
 * **Success toast notifications** after application submission.
@@ -162,7 +163,7 @@ SUBMITTED → UNDER_REVIEW → APPROVED
 ## Features Implemented
 
 * [x] Landing page with program information and how\-it\-works section
-* [x] Applicant registration with strong password validation
+* [x] Applicant registration with strong password validation and phone auto\-formatting \((XXX) XXX\-XXXX\)
 * [x] Login with anti\-enumeration and rate limiting
 * [x] JWT authentication with 30\-minute expiry and client\-side expiry check
 * [x] Role\-based routing and authorization (APPLICANT vs REVIEWER)
@@ -235,9 +236,10 @@ Cursor AI was used throughout development as a coding assistant. Here is how AI 
 
 ### Testing & Bug Discovery
 
-* A comprehensive test suite (250\+ test cases) was generated covering unit tests, integration tests, edge cases, and security scenarios.
+* A comprehensive test suite (`backend/test_suite.js`, 250\+ test cases) was generated covering unit tests, integration tests, edge cases, and security scenarios.
+* A dedicated registration test suite (`backend/test_register.js`, 223 test cases) covers the happy path, JWT payload integrity, full name, email, password strength, confirm\-password, role enforcement, and edge cases.
 * AI helped identify a critical bug where `File` objects were lost during React Router navigation (fixed with a module\-level file store).
-* Rate limiter interaction with test ordering was identified and resolved.
+* Rate limiter interaction with test ordering was identified and resolved (restart server between runs to reset in\-memory limiter).
 
 ### Refactoring
 
